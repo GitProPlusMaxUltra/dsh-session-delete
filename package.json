@@ -1,5 +1,5 @@
 {
-  "name": "@gitproplusmaxultra/dsh-session-reaper",
+  "name": "@gitproplusmaxultra/dsh-session-delete",
   "version": "0.1.0",
   "private": true,
   "description": "DSH plugin that permanently deletes sessions (not just archives them) and manages archived sessions",
@@ -16,11 +16,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GitProPlusMaxUltra/dsh-session-reaper.git"
+    "url": "git+https://github.com/GitProPlusMaxUltra/dsh-session-delete.git"
   },
-  "homepage": "https://github.com/GitProPlusMaxUltra/dsh-session-reaper#readme",
+  "homepage": "https://github.com/GitProPlusMaxUltra/dsh-session-delete#readme",
   "bugs": {
-    "url": "https://github.com/GitProPlusMaxUltra/dsh-session-reaper/issues"
+    "url": "https://github.com/GitProPlusMaxUltra/dsh-session-delete/issues"
   },
   "main": "index.js",
   "exports": {
