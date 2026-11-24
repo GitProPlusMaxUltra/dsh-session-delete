@@ -1,4 +1,4 @@
 - insert:
     - id: session-reaper
-      name: '@gitproplusmaxultra/dsh-session-reaper'
+      name: '@gitproplusmaxultra/dsh-session-delete'
       config: {}

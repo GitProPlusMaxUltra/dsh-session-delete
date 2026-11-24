@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Session reaper",
+    "description": "Permanently deletes sessions instead of archiving them, and lists, restores, or deletes archived sessions.",
+    "detail": "docs/DETAIL.md"
+  }
+}

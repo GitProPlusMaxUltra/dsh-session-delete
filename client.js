@@ -9,7 +9,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: '@gitproplusmaxultra/dsh-session-reaper',
+  id: '@gitproplusmaxultra/dsh-session-delete',
   factory(require) {
     const React = require('react')
     const h = React.createElement

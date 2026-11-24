@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "会话回收站",
+    "description": "真正删除会话而不是仅归档，并可管理、恢复或删除已归档的会话。",
+    "detail": "docs/DETAIL.md"
+  }
+}
