@@ -1,0 +1,55 @@
+{
+  "name": "@gitproplusmaxultra/dsh-session-reaper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH plugin that permanently deletes sessions (not just archives them) and manages archived sessions",
+  "type": "module",
+  "license": "MIT",
+  "author": "GitProPlusMaxUltra",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "session",
+    "delete",
+    "archive"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GitProPlusMaxUltra/dsh-session-reaper.git"
+  },
+  "homepage": "https://github.com/GitProPlusMaxUltra/dsh-session-reaper#readme",
+  "bugs": {
+    "url": "https://github.com/GitProPlusMaxUltra/dsh-session-reaper/issues"
+  },
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ]
+}
