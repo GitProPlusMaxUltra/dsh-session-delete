@@ -48,7 +48,7 @@ human-readable table or summary.
 | `delete` | Permanently delete one session | `sessionId`, `confirm: true` |
 | `purge_archived` | Permanently delete every archived session | `confirm: true` |
 
-`force: true` skips the running-activity check; it never deletes a session that is open in this process.
+`force: true` skips the running-activity check; a session this process still holds open is archived and removed on release either way.
 
 ## What a deletion actually removes
 
@@ -57,20 +57,28 @@ human-readable table or summary.
    written underneath its owner.
 2. **The stored log.** Every file in the session's own storage directory (`session*.jsonl`,
    `session*.jsonl.zstd`, and the POSIX `session.lock`) is removed, then the directory itself when it is
-   empty. A directory holding anything that is not a session artifact is refused untouched.
+   empty. A directory holding anything that is not a session artifact is refused untouched. A session
+   this process still holds open is force-closed first, then removed the same way.
 3. **A report.** Which files went, how many bytes were freed, and which workspaces were detached.
 
 ## Usage notes and limits
 
 - **Not a recycle bin.** There is no undo. The confirmation exists because the bytes are gone.
-- **Open sessions are refused.** A session with a live agent in this process cannot be deleted; close it
-  first. A session another DSH process is writing is not detected — do not delete from one process what
-  another process is using.
+- **An open session is force-closed, not skipped.** Its running work is stopped, it is archived (an
+  archived session runs no further agent steps), and its log is removed immediately. While the process
+  still holds it the plugin keeps the log removed, so a disposal flush cannot resurrect it; those ids are
+  recorded in `~/.dsh/session-reaper/tombstones.json`, so a restart finishes the cleanup. Deleting the
+  conversation you are in therefore closes it on the spot.
+- **A session another DSH process is writing is not detected** — do not delete from one process what
+  another is using.
 - **Archived sessions are the safe target.** They are closed by definition, which is why bulk purge only
   ever looks at the archive set.
-- **Per-session caches and attachments are not pruned.** Session search and the projection cache rebuild
-  from stored logs, so a deleted session disappears from both, but orphaned attachment files and cache
-  rows may remain until other tooling collects them. This plugin handles the session log itself.
+- **Images and files sent in the session are not deleted.** Attachments live in a global,
+  content-addressed store (`~/.dsh/attachments/v1/objects/…`): one object per unique byte sequence,
+  shared by every session that referenced it, and DSH offers no garbage collection for it. Deleting a
+  session therefore leaves its attachments behind as unreferenced objects. Removing them safely would mean
+  scanning every other session for references, which this plugin deliberately does not do — the session
+  log is the only thing it owns.
 - **The panel loads over the command plane.** Each panel refresh runs one `/session-admin list --json`
   against the open session, which the Host records in that session's log as an ordinary command
   lifecycle (`command/run`, `command/done`). Nothing is polled: the panel loads when it opens and when

@@ -49,8 +49,10 @@ window.__ModuleLoader__.load({
       cancel: 'Cancel',
       working: 'Working…',
       deleted: (id) => `Deleted ${id}.`,
+      forced: (id) => `Deleted ${id} — it was open, so it was forced closed first.`,
       restored: (id) => `Restored ${id}.`,
       purged: (n, failed) => (failed === 0 ? `Deleted ${n} archived session(s).` : `Deleted ${n}; ${failed} failed.`),
+      forcedSuffix: 'force-closed while open',
       totalNote: (shown, total) => `${shown} shown of ${total} stored`,
     }
 
@@ -85,8 +87,10 @@ window.__ModuleLoader__.load({
       cancel: '取消',
       working: '处理中…',
       deleted: (id) => `已删除 ${id}。`,
+      forced: (id) => `已删除 ${id}（原本打开中，已先强制关闭）。`,
       restored: (id) => `已恢复 ${id}。`,
       purged: (n, failed) => (failed === 0 ? `已删除 ${n} 个已归档会话。` : `已删除 ${n} 个；${failed} 个失败。`),
+      forcedSuffix: '个为打开状态、已强制关闭',
       totalNote: (shown, total) => `显示 ${shown} 个，共 ${total} 个`,
     }
 
@@ -104,6 +108,12 @@ window.__ModuleLoader__.load({
       radius: 'var(--dsw-radius-md, 8px)',
       mono: 'var(--dsw-font-mono, ui-monospace, monospace)',
     }
+
+    /**
+     * Host session listing bound when the `remote.session` namespace is available.
+     * Accessed through an optional inject so a composition without it still activates.
+     */
+    let hostSessionList = null
 
     /**
      * The session this browser actually has open. `agentAvailable` on a catalog row is not a
@@ -146,16 +156,13 @@ window.__ModuleLoader__.load({
       return undefined
     }
 
-    /** Ask the Host for its session rows and pick any session whose agent is live. */
-    async function hostAgentSession(ctx) {
-      let namespace
-      try {
-        namespace = ctx.get('remote')?.session
-      } catch {
-        return undefined
-      }
-      if (namespace === undefined) return undefined
-      const outcome = await namespace.list({})
+    /**
+     * Ask the Host which sessions own a live agent. This is the authoritative answer and
+     * covers the common case where the page has no open conversation of its own.
+     */
+    async function hostAgentSession() {
+      if (hostSessionList === null) return undefined
+      const outcome = await hostSessionList({})
       if (!outcome?.ok) return undefined
       for (const row of outcome.value?.items ?? []) {
         if (row.agentAvailable === true) return String(row.sessionId)
@@ -166,18 +173,15 @@ window.__ModuleLoader__.load({
     const sleep = (ms) => new Promise(resolve => { setTimeout(resolve, ms) })
 
     async function findAgentSession(ctx) {
-      // The catalog and the first binding are filled asynchronously after boot, so a panel
-      // opened early waits a moment instead of reporting a false "no session".
-      for (let attempt = 0; attempt < 12; attempt++) {
+      // Host first: it knows which agents are live even when this browser holds no binding.
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const fromHost = await hostAgentSession().catch(() => undefined)
+        if (fromHost !== undefined) return fromHost
         const fromCatalog = catalogAgentSession(ctx)
         if (fromCatalog !== undefined) return fromCatalog
-        if (attempt === 4) {
-          const fromHost = await hostAgentSession(ctx).catch(() => undefined)
-          if (fromHost !== undefined) return fromHost
-        }
-        await sleep(250)
+        await sleep(200)
       }
-      return await hostAgentSession(ctx).catch(() => undefined)
+      return await hostAgentSession().catch(() => undefined)
     }
 
     /** Run one `/session-admin` line and return its JSON payload. */
@@ -203,7 +207,10 @@ window.__ModuleLoader__.load({
         } catch (cause) {
           detail = `catalog error: ${cause instanceof Error ? cause.message : String(cause)}`
         }
-        throw new Error(`no open session to address (${detail})`)
+        throw new Error(
+          `no open session to address (${detail}) — `
+          + 'open any session once, then retry: the Host answers this panel through the session command plane.',
+        )
       }
       const commands = ctx.remote?.commands ?? ctx.get('remote')?.commands
       if (commands === undefined) throw new Error('the Host command plane is unavailable')
@@ -291,13 +298,17 @@ window.__ModuleLoader__.load({
         try {
           if (action.op === 'delete') {
             const payload = await runCommand(`/session-admin delete ${action.sessionId} --yes --json`)
-            setNotice(t('deleted')(payload.sessionId ?? action.sessionId))
+            const id = payload.sessionId ?? action.sessionId
+            setNotice(payload.forced === true ? t('forced')(id) : t('deleted')(id))
           } else if (action.op === 'restore') {
             const payload = await runCommand(`/session-admin restore ${action.sessionId} --json`)
             setNotice(t('restored')(payload.sessionId ?? action.sessionId))
           } else if (action.op === 'purge') {
             const payload = await runCommand('/session-admin purge --yes --json')
-            setNotice(t('purged')(payload.deleted?.length ?? 0, payload.failed?.length ?? 0))
+            const forcedCount = payload.forced?.length ?? 0
+            setNotice(forcedCount === 0
+              ? t('purged')(payload.deleted?.length ?? 0, payload.failed?.length ?? 0)
+              : `${t('purged')(payload.deleted?.length ?? 0, payload.failed?.length ?? 0)} (+${forcedCount} ${t('forcedSuffix')})`)
           }
           setConfirmId(null)
           setConfirmPurge(false)
@@ -536,7 +547,8 @@ window.__ModuleLoader__.load({
         try {
           const payload = await runCommand(`/session-admin delete ${pending.sessionId} --yes --json`)
           close()
-          notify(t('deleted')(payload.sessionId ?? pending.sessionId), true)
+          const id = payload.sessionId ?? pending.sessionId
+          notify(payload.forced === true ? t('forced')(id) : t('deleted')(id), true)
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : String(cause)
           setFailure(message)
@@ -646,6 +658,13 @@ window.__ModuleLoader__.load({
           /* feedback is best-effort */
         }
       }
+
+      // Optional: the Host session listing is what tells us which agent can receive the
+      // command. A composition without it still loads; discovery then relies on bindings.
+      ctx.inject(['remote.session'], (scope) => {
+        hostSessionList = request => scope.remote.session.list(request)
+        return () => { hostSessionList = null }
+      })
 
       ctx.slots.inject('main', () => ctx.slots.register({
         name: 'main',

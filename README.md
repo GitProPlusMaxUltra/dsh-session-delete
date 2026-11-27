@@ -56,7 +56,7 @@ A **Sessions** entry in the sidebar opens a panel with the whole store: filter b
 | `delete` | Permanently delete one session | `sessionId`, `confirm: true` |
 | `purge_archived` | Permanently delete every archived session | `confirm: true` |
 
-`force: true` skips the running-activity check; it never deletes a session that is open in this process.
+`force: true` skips the running-activity check; a session this process still holds open is archived and removed on release either way.
 
 ## What a deletion actually removes
 
@@ -67,9 +67,18 @@ A **Sessions** entry in the sidebar opens a panel with the whole store: filter b
 ## Limitations
 
 - **Not a recycle bin.** There is no undo; the confirmation exists because the bytes are gone.
-- **Open sessions are refused.** A session with a live agent in this process cannot be deleted; close it first. A session another DSH process is writing is not detected — do not delete from one process what another is using.
+- **Open sessions are force-closed, not skipped.** Deleting a session the Host still holds open stops its
+  running work, archives it (an archived session runs no further agent steps) and then removes its log
+  immediately. Until the process releases it, the plugin keeps the log removed, so a disposal flush cannot
+  resurrect it; the ids live in `~/.dsh/session-reaper/tombstones.json` so a restart finishes the cleanup.
+- **A session another DSH process is writing is not detected** — do not delete from one process what another is using.
 - **Archived sessions are the safe target.** They are closed by definition, which is why bulk purge only ever looks at the archive set.
-- **Per-session caches and attachments are not pruned.** Session search and the projection cache rebuild from stored logs, so a deleted session disappears from both, but orphaned attachment files and cache rows may remain until other tooling collects them.
+- **Images and files sent in the session are not deleted.** Attachments live in a global, content-addressed
+  store (`~/.dsh/attachments/v1/objects/…`): one object per unique byte sequence, shared by every session
+  that referenced it, and DSH offers no garbage collection for it. Deleting a session therefore leaves its
+  attachments behind as unreferenced objects, and removing them safely would mean scanning every other
+  session for references — which this plugin deliberately does not do. Session search and the projection
+  cache, by contrast, rebuild from stored logs, so a deleted session disappears from both.
 - **The panel needs one open session.** The browser bundle talks to the Host over the session command plane, which is the only client→host channel available to a third-party plugin in the Web client. The row icon has the same requirement; both report it rather than guessing.
 - **The row icon is hidden on hoverless devices.** That strip is hidden by the host there; use the panel instead.
 - **Host APIs move.** This was built and exercised against DSH `0.2.2-rc.5` (DSH Desktop Next `2.0.24-next`); a later release may rename the slots, services, or registry methods it uses.
@@ -115,8 +124,8 @@ DSH 只提供"归档"——把会话 id 放进 Workspace 注册表的一个持�
 ### 注意
 
 - **没有回收站**，不可撤销
-- **当前打开的会话不能删**（会明确报错），请先关闭
-- **缓存与附件不清理**：会话搜索、投影缓存会从日志重建，所以删掉的会话会消失；但附件对象和缓存行可能残留
+- **打开中的会话会被强制关闭**：删除一个仍被 Host 持有的会话时，会先停止它正在运行的工作、把它归档（已归档会话不再执行 agent 步骤），随后立即删除日志。在进程释放它之前，插件会持续保持日志不存在，避免释放时的刷写把文件写回来；这些 id 记在 `~/.dsh/session-reaper/tombstones.json`，重启后会继续清理完。因此删除你正在使用的对话会当场关闭它。
+- **会话里的图片/文件不会被删**：附件存放在全局的内容寻址仓库（`~/.dsh/attachments/v1/objects/…`），按内容去重、被所有引用它的会话共享，且 DSH 没有提供回收接口。因此删掉会话后，它的附件会变成无人引用的孤儿对象留在磁盘上；要安全清理必须先扫描全部其它会话确认无引用，本插件有意不做这件事。会话搜索与投影缓存则会从日志重建，删掉的会话会从两处消失。
 - **面板需要一个打开的会话**作为命令通道（第三方插件在 Web 端唯一可用的客户端→Host 通道）
 - **触摸设备上无行内图标**，请用面板
 - 基于 DSH `0.2.2-rc.5` 开发验证，后续版本可能重命名相关插槽/服务
